@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EmmaGlow — Simulador del Laboratorio B2B</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,600;1,400&family=Plus+Jakarta+Sans:wght@200;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --emma-pink: #FDF4F2;
+            --emma-accent: #E7AC9A;
+            --emma-rose: #F472B6;
+            --emma-text: #4A4A4A;
+            --emma-dark: #2D1B1B;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background-color: var(--emma-pink);
+            color: var(--emma-text);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            overflow-x: hidden;
+            cursor: none;
+            user-select: none;
+        }
+
+        .serif { font-family: 'Cormorant Garamond', serif; }
+
+        /* ===== CURSOR MANO GUANTE ROSA ===== */
+        #custom-cursor {
+            position: fixed;
+            width: 52px;
+            height: 52px;
+            pointer-events: none;
+            z-index: 99999;
+            transform: translate(-12%, -8%);
+            transition: transform 0.05s ease;
+            filter: drop-shadow(0 3px 6px rgba(231,172,154,0.5));
+        }
+        #custom-cursor.grabbing { transform: translate(-12%, -8%) scale(0.9); }
+        #custom-cursor svg { width: 100%; height: 100%; }
+
+        /* ===== PANTALLA INICIO ===== */
+        #start-screen {
+            position: fixed; inset: 0; z-index: 100;
+            background: linear-gradient(160deg, #FDF4F2 0%, #FDE8E2 50%, #FDF4F2 100%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center;
+            overflow-y: auto;
+            padding: 40px 0;
+        }
+        .formula-card {
+            background: rgba(255,255,255,0.85);
+            backdrop-filter: blur(20px);
+            border-radius: 40px;
+            padding: 32px 24px;
+            border: 1.5px solid rgba(231,172,154,0.2);
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative; overflow: hidden;
+        }
+        .formula-card::before {
+            content: ''; position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% 0%, rgba(231,172,154,0.12) 0%, transparent 70%);
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .formula-card:hover { transform: translateY(-8px) scale(1.02); box-shadow: 0 30px 60px rgba(231,172,154,0.25); border-color: var(--emma-accent); }
+        .formula-card:hover::before { opacity: 1; }
+
+        /* ===== LAB UI ===== */
+        #lab-ui { display: none; height: 100vh; flex-direction: column; padding: 20px 28px; }
+
+        /* ===== ESTACIÓN DE TRABAJO ===== */
+        .machine-container {
+            flex: 1;
+            background: rgba(255,255,255,0.75);
+            backdrop-filter: blur(16px);
+            border-radius: 36px;
+            border: 1.5px solid rgba(231,172,154,0.25);
+            box-shadow: 0 20px 60px rgba(231,172,154,0.12);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; overflow: hidden; padding: 24px;
+        }
+        .machine-container::after {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background: radial-gradient(ellipse at 50% 0%, rgba(231,172,154,0.08) 0%, transparent 60%);
+        }
+
+        /* ETIQUETA MÁQUINA */
+        .machine-label {
+            position: absolute; top: 20px; left: 24px;
+            font-size: 9px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+            color: var(--emma-accent); display: flex; align-items: center; gap: 6px;
+        }
+        .machine-label-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emma-accent); animation: blink 1.4s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+
+        /* ===== INPUT AREA ===== */
+        .input-area {
+            background: #1E1E1E; border-radius: 18px; padding: 14px 28px;
+            box-shadow: inset 0 2px 12px rgba(0,0,0,0.6), 0 4px 20px rgba(0,0,0,0.15);
+            display: flex; align-items: center; gap: 12px;
+            transition: box-shadow 0.3s;
+        }
+        .input-area input {
+            background: transparent; border: none; outline: none;
+            font-family: 'Courier New', monospace; font-size: 2rem; font-weight: 700;
+            color: #4ade80; width: 140px; text-align: center;
+        }
+        .input-area input::-webkit-outer-spin-button,
+        .input-area input::-webkit-inner-spin-button { -webkit-appearance: none; }
+        .input-unit { font-size: 11px; font-weight: 700; color: #6b6b6b; letter-spacing: 0.15em; }
+        .target-badge {
+            background: rgba(231,172,154,0.15); border: 1px solid rgba(231,172,154,0.3);
+            padding: 6px 14px; border-radius: 10px;
+            font-size: 10px; font-weight: 700; color: var(--emma-accent);
+        }
+
+        /* ===== PASOS ===== */
+        .paso-item {
+            padding: 12px 14px; border-radius: 18px; border: 1px solid transparent;
+            transition: all 0.3s ease; margin-bottom: 8px;
+        }
+        .paso-active { background: white; border-color: var(--emma-accent); box-shadow: 0 4px 16px rgba(231,172,154,0.15); }
+        .paso-done { background: rgba(134,239,172,0.08); border-color: rgba(134,239,172,0.3); opacity: 0.7; }
+        .paso-pending { opacity: 0.3; }
+
+        /* ===== BOTÓN CONFIRMAR ===== */
+        .btn-confirm {
+            background: var(--emma-dark); color: white; border: none;
+            padding: 14px 32px; border-radius: 50px; cursor: pointer;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .btn-confirm:hover { background: #E7AC9A; transform: scale(1.05); }
+
+        /* ===== ANIMACIONES MÁQUINAS ===== */
+        .balanza-plato { animation: tilt 3s ease-in-out infinite; transform-origin: center; }
+        @keyframes tilt { 0%,100%{transform:rotate(-2deg)} 50%{transform:rotate(2deg)} }
+
+        .mortero-body {
+            width: 140px; height: 88px;
+            background: linear-gradient(180deg, #F9F9F9 0%, #EBEBEB 100%);
+            border-radius: 0 0 70px 70px;
+            border: 3px solid #DEDEDE;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08), inset 0 -4px 10px rgba(0,0,0,0.05);
+            position: relative;
+        }
+        .moler-anim { animation: moler 1.2s infinite linear; }
+        @keyframes moler {
+            0%   { transform: rotate(0deg) translateX(12px) rotate(0deg); }
+            100% { transform: rotate(360deg) translateX(12px) rotate(-360deg); }
+        }
+
+        .girar-anim { animation: girar 0.7s infinite linear; }
+        @keyframes girar { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+
+        .barra-spin { animation: spinBarra 1s infinite linear; transform-origin: center; }
+        @keyframes spinBarra { from{transform:translateX(-50%) rotate(0)} to{transform:translateX(-50%) rotate(360deg)} }
+        .liquid-bubble {
+            position: absolute; border-radius: 50%;
+            background: rgba(255,255,255,0.5); animation: bubble 2s infinite ease-in;
+        }
+        @keyframes bubble { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-80px)} }
+
+        .pistón-anim { animation: pistón 1.6s ease-in-out infinite; }
+        @keyframes pistón { 0%,100%{top:30px} 50%{top:140px} }
+
+        .vapor {
+            position: absolute; width: 4px; border-radius: 2px;
+            background: rgba(255,255,255,0.7); animation: vapor 2s ease-in infinite;
+            bottom: 0;
+        }
+        @keyframes vapor { 0%{opacity:0.8;transform:translateY(0) scaleX(1)} 100%{opacity:0;transform:translateY(-60px) scaleX(3)} }
+
+        /* ===== MODAL FINAL ===== */
+        #final-modal {
+            position: fixed; inset: 0; z-index: 500;
+            background: linear-gradient(160deg, #FDF4F2 0%, #FDE8E2 100%);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            text-align: center;
+        }
+        .empaque-visual {
+            width: 220px; height: 280px; position: relative; margin: 0 auto 32px;
+            animation: aparecer 0.8s cubic-bezier(0.34,1.56,0.64,1) both;
+        }
+        @keyframes aparecer { from{opacity:0;transform:scale(0.6) rotate(-8deg)} to{opacity:1;transform:scale(1) rotate(0)} }
+
+        /* ERROR SHAKE */
+        @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-8px)} 75%{transform:translateX(8px)} }
+        .shake { animation: shake 0.3s ease; }
+
+        .calidad-bar { height: 4px; background: rgba(231,172,154,0.2); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+        .calidad-fill { height: 100%; background: linear-gradient(90deg, #4ade80, #86efac); border-radius: 2px; transition: width 0.5s ease; }
+        .calidad-fill.warn { background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+        .calidad-fill.danger { background: linear-gradient(90deg, #f87171, #ef4444); }
+
+        .btn-back {
+            transition: all 0.3s ease; background: none; border: none; cursor: pointer;
+            display: flex; align-items: center; gap: 8px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase;
+            color: #9CA3AF;
+        }
+        .btn-back:hover { color: var(--emma-accent); transform: translateX(-4px); }
+
+        .feedback-ok {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            background: rgba(134,239,172,0.95); color: #14532d;
+            padding: 12px 28px; border-radius: 50px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.15em;
+            z-index: 1000; pointer-events: none;
+            animation: fadeInOut 1s ease forwards;
+        }
+        @keyframes fadeInOut { 0%{opacity:0;transform:translate(-50%,-60%)} 20%{opacity:1;transform:translate(-50%,-50%)} 80%{opacity:1} 100%{opacity:0;transform:translate(-50%,-40%)} }
+
+        @keyframes polvoAnim { 0%,100%{transform:translateY(0) translateX(0)} 50%{transform:translateY(-12px) translateX(6px)} }
+        .liquid-fill { animation: llenar 3s ease forwards; }
+        @keyframes llenar { from{height:0} to{height:80%} }
+
+        #lista-pasos::-webkit-scrollbar { width: 3px; }
+        #lista-pasos::-webkit-scrollbar-thumb { background: rgba(231,172,154,0.4); border-radius: 2px; }
+
+        .numero-paso {
+            display: flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+            font-size: 10px; font-weight: 800;
+        }
+
+        /* ===== PLANTA INDUSTRIAL UI ===== */
+        #industrial-ui {
+            display: none;
+            height: 100vh;
+            background: #0d0c12;
+            color: #e2e8f0;
+            flex-direction: column;
+            padding: 24px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- CURSOR MANO GUANTE ROSA -->
+<div id="custom-cursor">
+    <svg viewBox="0 0 80 90" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="16" y="38" width="48" height="44" rx="12" fill="#F9B8C4"/>
+        <rect x="16" y="38" width="48" height="44" rx="12" fill="url(#glove-gradient)" opacity="0.6"/>
+        <rect x="20" y="14" width="12" height="34" rx="6" fill="#F9B8C4"/>
+        <rect x="34" y="8" width="12" height="36" rx="6" fill="#F9B8C4"/>
+        <rect x="48" y="12" width="12" height="34" rx="6" fill="#F9B8C4"/>
+        <rect x="60" y="20" width="10" height="28" rx="5" fill="#F9B8C4"/>
+        <rect x="10" y="34" width="10" height="24" rx="5" fill="#F9B8C4"/>
+        <rect x="22" y="16" width="4" height="14" rx="2" fill="rgba(255,255,255,0.5)"/>
+        <rect x="36" y="10" width="4" height="14" rx="2" fill="rgba(255,255,255,0.5)"/>
+        <rect x="16" y="38" width="48" height="44" rx="12" stroke="#E885A0" stroke-width="1.5"/>
+        <rect x="20" y="14" width="12" height="34" rx="6" stroke="#E885A0" stroke-width="1.2"/>
+        <rect x="34" y="8" width="12" height="36" rx="6" stroke="#E885A0" stroke-width="1.2"/>
+        <rect x="48" y="12" width="12" height="34" rx="6" stroke="#E885A0" stroke-width="1.2"/>
+        <rect x="60" y="20" width="10" height="28" rx="5" stroke="#E885A0" stroke-width="1.2"/>
+        <rect x="10" y="34" width="10" height="24" rx="5" stroke="#E885A0" stroke-width="1.2"/>
+        <defs>
+            <linearGradient id="glove-gradient" x1="16" y1="38" x2="64" y2="82" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#FFC8D5"/>
+                <stop offset="1" stop-color="#F085A0"/>
+            </linearGradient>
+        </defs>
+    </svg>
+</div>
+
+<!-- ===== PANTALLA SELECCIÓN ===== -->
+<div id="start-screen">
+    <p class="text-[9px] font-bold uppercase tracking-[0.5em] text-[#E7AC9A] mb-4">Simulador I+D · Planta de Manufactura</p>
+    <h1 class="serif mb-3 text-7xl md:text-8xl" style="color:#E7AC9A;line-height:1">EmmaGlow</h1>
+    <p class="text-[10px] text-gray-400 uppercase tracking-[0.4em] mb-12 italic">Plataforma de Simulación Cosmética & Capilar</p>
+
+    <!-- Formula list B2C/B2B (Using SVG Drawings instead of emojis) -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 w-full max-w-7xl px-8 mb-8">
+        
+        <!-- Powder Card -->
+        <div class="formula-card flex flex-col items-center" onclick="iniciarProceso('polvo')">
+            <div class="w-16 h-16 mb-3 text-[#E7AC9A] flex items-center justify-center">
+                <svg viewBox="0 0 64 64" class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <circle cx="32" cy="32" r="24"/>
+                    <circle cx="32" cy="32" r="18" stroke-dasharray="4 3"/>
+                    <path d="M22 22l20 20M42 22L22 42"/>
+                </svg>
+            </div>
+            <h3 class="serif text-2xl mb-1">Polvo Compacto</h3>
+            <p class="text-[9px] text-gray-400 uppercase tracking-widest mb-4">BHA Pore-Refining</p>
+            <div style="height:2px;background:linear-gradient(90deg,#E7AC9A,transparent);border-radius:1px;width:100%;margin-bottom:12px"></div>
+            <p class="text-[10px] text-gray-500">Mortero · Hobart · Prensa</p>
+        </div>
+
+        <!-- Liquid Card -->
+        <div class="formula-card flex flex-col items-center" onclick="iniciarProceso('liquido')">
+            <div class="w-16 h-16 mb-3 text-[#F472B6] flex items-center justify-center">
+                <svg viewBox="0 0 64 64" class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M32 6L16 34c0 8.8 7.2 16 16 16s16-7.2 16-16L32 6z"/>
+                    <circle cx="32" cy="34" r="6" fill="currentColor" fill-opacity="0.1"/>
+                </svg>
+            </div>
+            <h3 class="serif text-2xl mb-1">Rubor Líquido</h3>
+            <p class="text-[9px] text-gray-400 uppercase tracking-widest mb-4">Niacinamide Sebum-Control</p>
+            <div style="height:2px;background:linear-gradient(90deg,#F472B6,transparent);border-radius:1px;width:100%;margin-bottom:12px"></div>
+            <p class="text-[10px] text-gray-500">Beaker · Agitador · Filtro</p>
+        </div>
+
+        <!-- Cream Card -->
+        <div class="formula-card flex flex-col items-center" onclick="iniciarProceso('crema')">
+            <div class="w-16 h-16 mb-3 text-[#FB7185] flex items-center justify-center">
+                <svg viewBox="0 0 64 64" class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M12 24h40v26H12zM20 24V14a12 12 0 0 1 24 0v10"/>
+                    <line x1="12" y1="36" x2="52" y2="36"/>
+                </svg>
+            </div>
+            <h3 class="serif text-2xl mb-1">Rubor en Crema</h3>
+            <p class="text-[9px] text-gray-400 uppercase tracking-widest mb-4">Tea Tree Antibacterial</p>
+            <div style="height:2px;background:linear-gradient(90deg,#FB7185,transparent);border-radius:1px;width:100%;margin-bottom:12px"></div>
+            <p class="text-[10px] text-gray-500">Baño María · SAMIX · Envasadora</p>
+        </div>
+
+        <!-- BioBlush Card -->
+        <div class="formula-card flex flex-col items-center" onclick="iniciarProceso('bioblush')">
+            <div class="w-16 h-16 mb-3 text-[#E8507A] flex items-center justify-center">
+                <svg viewBox="0 0 64 64" class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M32 4a28 28 0 0 0-28 28c0 15.5 12.5 28 28 28s28-12.5 28-28A28 28 0 0 0 32 4zm0 46a18 18 0 0 1-18-18c0-10 8-18 18-18s18 8 18 18a18 18 0 0 1-18 18z"/>
+                    <circle cx="32" cy="32" r="4" fill="currentColor"/>
+                </svg>
+            </div>
+            <h3 class="serif text-2xl mb-1" style="color:#E8507A">Bio-Blush</h3>
+            <p class="text-[9px] uppercase tracking-widest mb-4" style="color:#E8507A;opacity:0.7">Rosa Sandía · Termostable</p>
+            <div style="height:2px;background:linear-gradient(90deg,#E8507A,transparent);border-radius:1px;width:100%;margin-bottom:12px"></div>
+            <p class="text-[10px] text-gray-500">Agitador · Mortero · SAMIX · pH</p>
+        </div>
+
+        <!-- Hair Card -->
+        <div class="formula-card flex flex-col items-center" onclick="iniciarProceso('capilar')">
+            <div class="w-16 h-16 mb-3 text-[#22C55E] flex items-center justify-center">
+                <svg viewBox="0 0 64 64" class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M20 12c4 8 2 16 8 24s12 10 16 18M32 8c4 8 2 16 8 24s12 10 16 18M44 4c4 8 2 16 8 24s12 10 16 18"/>
+                    <path d="M12 40a8 8 0 0 0 8-8V16a8 8 0 0 0-16 0v16a8 8 0 0 0 8 8z" fill="currentColor" fill-opacity="0.1"/>
+                </svg>
+            </div>
+            <h3 class="serif text-2xl mb-1" style="color:#22C55E">Bio-Gloss Capilar</h3>
+            <p class="text-[9px] uppercase tracking-widest mb-4" style="color:#22C55E;opacity:0.7">Romero & Queratina</p>
+            <div style="height:2px;background:linear-gradient(90deg,#22C55E,transparent);border-radius:1px;width:100%;margin-bottom:12px"></div>
+            <p class="text-[10px] text-gray-500">Agitador · Mortero · Baño María</p>
+        </div>
+    </div>
+
+    <!-- Planta Industrial CTA (Drawings / SVG instead of emojis) -->
+    <button onclick="iniciarIndustrial()" class="bg-gradient-to-r from-[#2D1B1B] to-[#E8507A] text-white border-none padding px-10 py-4.5 rounded-full cursor-pointer font-bold text-xs uppercase tracking-widest flex items-center gap-3 transition-all hover:scale-105 shadow-xl">
+        <svg viewBox="0 0 24 24" class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M3 21h18M19 21v-8l-4-4v4l-4-4v4l-4-4v12M9 17h2M13 17h2"/>
+        </svg>
+        Simulación Masiva: Planta Industrial ➔
+    </button>
+</div>
+
+<!-- ===== LAB UI (Step by Step Simulator) ===== -->
+<div id="lab-ui" style="display:none;height:100vh;flex-direction:column;padding:20px 28px;">
+    <!-- HEADER -->
+    <header class="flex justify-between items-start mb-4">
+        <div class="flex items-center gap-6">
+            <button onclick="location.reload()" class="btn-back">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                Menú principal
+            </button>
+            <div>
+                <h2 id="titulo-producto" class="serif" style="font-size:2.2rem;line-height:1;color:#4A4A4A"></h2>
+                <p id="subtitulo-maquina" class="text-[9px] text-gray-400 uppercase tracking-widest mt-1"></p>
+            </div>
+        </div>
+        <div class="text-right">
+            <p class="text-[9px] font-bold uppercase tracking-widest" style="color:#E7AC9A">Calidad del Lote</p>
+            <p id="calidad-display" class="serif" style="font-size:2.8rem;line-height:1">100%</p>
+            <div class="calidad-bar" style="width:100px;margin-left:auto;margin-top:4px">
+                <div id="calidad-fill" class="calidad-fill" style="width:100%"></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- LAYOUT PRINCIPAL -->
+    <div style="display:flex;gap:20px;flex:1;min-height:0">
+        <!-- ÁREA MÁQUINA -->
+        <div class="machine-container" style="flex:1">
+            
+            <!-- BIOLINK HUD -->
+            <div id="dermal-hud" style="position:absolute;top:20px;right:24px;width:200px;background:rgba(255,255,255,0.85);backdrop-filter:blur(10px);border:1.5px solid rgba(231,172,154,0.35);border-radius:20px;padding:12px;box-shadow:0 8px 24px rgba(231,172,154,0.12);z-index:10;display:flex;flex-direction:column;gap:8px">
+                <div style="display:flex;align-items:center;justify-content:space-between">
+                    <span id="hud-header-title" style="font-size:8px;font-weight:800;letter-spacing:0.1em;color:#E7AC9A;text-transform:uppercase">🧬 Biolink Cutáneo</span>
+                    <span id="pore-status" style="font-size:7px;font-weight:700;color:#22c55e;text-transform:uppercase">Estable</span>
+                </div>
+                <!-- Canvas de Poro -->
+                <canvas id="pore-canvas" width="176" height="90" style="border-radius:10px;background:#FDF6F4;border:1px solid rgba(231,172,154,0.15)"></canvas>
+                
+                <!-- Selector de Vista Capilar -->
+                <div id="capilar-view-toggle" style="display:none;align-items:center;justify-content:center;gap:6px;margin-top:2px">
+                    <button id="btn-view-cuticula" onclick="cambiarVistaCapilar('cuticula')" style="background:#2D1B1B;color:white;border:none;padding:3px 8px;border-radius:6px;font-size:7px;font-weight:700;cursor:pointer">Cutícula</button>
+                    <button id="btn-view-molecular" onclick="cambiarVistaCapilar('molecular')" style="background:rgba(231,172,154,0.15);color:#E7AC9A;border:none;padding:3px 8px;border-radius:6px;font-size:7px;font-weight:700;cursor:pointer">Molecular</button>
+                </div>
+
+                <!-- Datos Reológicos -->
+                <div style="display:flex;flex-direction:column;gap:3px">
+                    <div style="display:flex;justify-content:space-between;font-size:8px;color:#888">
+                        <span>Viscosidad:</span>
+                        <span id="hud-viscosidad" style="font-weight:700;color:#2D1B1B">0 cPs</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:8px;color:#888">
+                        <span id="hud-sebo-label">Reducción de Sebo:</span>
+                        <span id="hud-sebo" style="font-weight:700;color:#22c55e">0%</span>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:8px;color:#888">
+                        <span id="hud-redness-label">Enrojecimiento:</span>
+                        <span id="hud-redness" style="font-weight:700;color:#22c55e">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="machine-label">
+                <div class="machine-label-dot"></div>
+                <span id="maquina-nombre-label">—</span>
+            </div>
+            <div id="machine-visual" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;flex:1;width:100%;position:relative"></div>
+
+            <!-- CONTROLES INPUT -->
+            <div style="display:flex;flex-direction:column;align-items:center;gap:12px;padding-bottom:8px">
+                <div style="display:flex;align-items:center;gap:10px">
+                    <div id="target-badge" class="target-badge">
+                        Meta: <span id="target-value">—</span> <span id="unit-label">—</span>
+                    </div>
+                </div>
+                <div class="input-area" id="input-area">
+                    <input type="number" id="valor-input" placeholder="0.00" step="0.01">
+                    <span class="input-unit" id="unit-display">—</span>
+                </div>
+                <button class="btn-confirm" onclick="validarPaso()">
+                    ✓ &nbsp; Confirmar
+                </button>
+                <p id="instruccion-maquina" style="font-size:10px;color:#9CA3AF;font-weight:600;letter-spacing:0.1em;text-align:center"></p>
+            </div>
+        </div>
+
+        <!-- LISTA DE PASOS -->
+        <aside style="width:260px;display:flex;flex-direction:column">
+            <div style="background:rgba(255,255,255,0.6);backdrop-filter:blur(12px);padding:20px 16px;border-radius:32px;border:1.5px solid rgba(231,172,154,0.2);flex:1;display:flex;flex-direction:column;overflow:hidden">
+                <p class="text-[9px] font-bold text-gray-400 uppercase tracking-widest mb-4">Hoja de Ruta</p>
+                <div id="lista-pasos" style="flex:1;overflow-y:auto"></div>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<!-- ===== MODAL FINAL CON PROBADOR SENSORIAL ===== -->
+<div id="final-modal" style="display:none;position:fixed;inset:0;z-index:500;background:linear-gradient(160deg,#FDF4F2,#FDE8E2);align-items:center;justify-content:center;padding:24px;overflow-y:auto">
+    <div style="display:flex;flex-direction:column;lg:flex-direction:row;align-items:center;justify-content:center;gap:36px;max-width:1100px;width:100%;flex-wrap:wrap">
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center;max-width:420px;width:100%">
+            <div id="empaque-container" class="empaque-visual"></div>
+            <p class="text-[9px] font-bold uppercase tracking-[0.4em] mb-2" style="color:#E7AC9A">Control de Calidad · Liberación de Lote</p>
+            
+            <div class="flex items-center justify-center gap-2 mb-3 text-green-500">
+                <svg viewBox="0 0 24 24" class="w-12 h-12" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12"/>
+                </svg>
+            </div>
+            
+            <h2 class="serif mb-3 text-5xl md:text-6xl" style="color:#E7AC9A;line-height:1">Lote Aprobado</h2>
+            <p id="final-desc" class="text-sm text-gray-400 mb-4" style="line-height:1.7;max-width:380px"></p>
+            <p id="final-specs" class="text-[10px] text-gray-300 mb-8">✓ pH conforme &nbsp;·&nbsp; ✓ Sin impurezas &nbsp;·&nbsp; ✓ Textura certificada</p>
+            <button onclick="location.reload()" style="background:#2D1B1B;color:white;border:none;padding:14px 32px;border-radius:50px;cursor:pointer;font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;transition:all 0.3s" onmouseover="this.style.background='#E7AC9A'" onmouseout="this.style.background='#2D1B1B'">
+                Nueva Fórmula
+            </button>
+        </div>
+        
+        <div style="background:rgba(255,255,255,0.75);backdrop-filter:blur(16px);border:1.5px solid rgba(231,172,154,0.3);border-radius:32px;padding:28px;width:100%;max-width:420px;box-shadow:0 20px 50px rgba(231,172,154,0.12);display:flex;flex-direction:column;gap:16px;text-align:left">
+            <div>
+                <span style="font-size:8px;font-weight:800;letter-spacing:0.15em;color:#E7AC9A;text-transform:uppercase">✨ Laboratorio Sensorial Enterprise</span>
+                <h4 id="sensory-title" class="serif text-3xl mt-1 mb-1" style="color:#2D1B1B">Probador de Textura</h4>
+                <p id="sensory-instructions" style="font-size:9px;color:#888;line-height:1.4"></p>
+            </div>
+            
+            <div style="position:relative;border-radius:24px;overflow:hidden;border:1px solid rgba(231,172,154,0.25)">
+                <canvas id="sensory-canvas" width="364" height="170" style="background:#FFF8F6;display:block;touch-action:none"></canvas>
+                <button onclick="reiniciarSensoryCanvas()" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.9);border:1px solid rgba(231,172,154,0.35);border-radius:30px;padding:4px 10px;font-size:8px;font-weight:800;color:#2D1B1B;cursor:pointer">
+                    Limpiar
+                </button>
+            </div>
+            
+            <div style="display:flex;flex-direction:column;gap:6px">
+                <p style="font-size:8px;font-weight:800;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.12em;margin-bottom:2px">Métricas Físicas de Co-Creación</p>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                    <div style="background:rgba(255,255,255,0.65);border-radius:12px;padding:8px 12px;border:1px solid rgba(231,172,154,0.15)">
+                        <div style="font-size:7px;color:#9CA3AF;font-weight:700;text-transform:uppercase" id="sensory-metric-1-lbl">Extensibilidad:</div>
+                        <div style="font-size:12px;font-weight:800;color:#2D1B1B;margin-top:2px" id="sensory-metric-1-val">—</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.65);border-radius:12px;padding:8px 12px;border:1px solid rgba(231,172,154,0.15)">
+                        <div style="font-size:7px;color:#9CA3AF;font-weight:700;text-transform:uppercase" id="sensory-metric-2-lbl">Tiempo Absorción:</div>
+                        <div style="font-size:12px;font-weight:800;color:#2D1B1B;margin-top:2px" id="sensory-metric-2-val">—</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.65);border-radius:12px;padding:8px 12px;border:1px solid rgba(231,172,154,0.15)">
+                        <div style="font-size:7px;color:#9CA3AF;font-weight:700;text-transform:uppercase" id="sensory-metric-3-lbl">Acabado Glow:</div>
+                        <div style="font-size:12px;font-weight:800;color:#2D1B1B;margin-top:2px" id="sensory-metric-3-val">—</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.65);border-radius:12px;padding:8px 12px;border:1px solid rgba(231,172,154,0.15)">
+                        <div style="font-size:7px;color:#9CA3AF;font-weight:700;text-transform:uppercase" id="sensory-metric-4-lbl">Adherencia:</div>
+                        <div style="font-size:12px;font-weight:800;color:#2D1B1B;margin-top:2px" id="sensory-metric-4-val">—</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== PLANTA INDUSTRIAL UI (INVIMA Certified Control Room) ===== -->
+<div id="industrial-ui" class="w-full flex-col">
+    <!-- Header -->
+    <header class="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+        <div class="flex items-center gap-4">
+            <button onclick="location.reload()" class="text-xs bg-white/5 border border-white/10 text-gray-300 px-3 py-1.5 rounded-lg hover:bg-white/10 transition-all uppercase tracking-wider">
+                ← Menú
+            </button>
+            <div>
+                <h2 class="serif text-3xl text-[#E7AC9A] font-bold">Consola SCADA de Control Industrial</h2>
+                <p class="text-[9px] text-[#80ba41] font-bold uppercase tracking-widest mt-0.5">Control de Calidad bajo Parámetros de Laboratorio INVIMA</p>
+            </div>
+        </div>
+        <!-- Status Panel -->
+        <div class="flex items-center gap-6">
+            <div class="text-right">
+                <span class="text-[9px] text-gray-400 block">LOTE PROCESADO</span>
+                <span class="font-mono text-2xl font-bold" id="ind-volume">0 L</span> <span class="text-xs text-gray-500">/ 5000L</span>
+            </div>
+            <div class="text-right">
+                <span class="text-[9px] text-gray-400 block">CUMPLIMIENTO DE CONFORMIDAD</span>
+                <span class="font-mono text-2xl text-[#80ba41] font-bold" id="ind-qc">100%</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Console Panels Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 min-h-0">
+        
+        <!-- Left: Schematics Panel (5 Cols) -->
+        <div class="lg:col-span-5 bg-[#121118] border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center relative overflow-hidden">
+            <h3 class="absolute top-4 left-4 text-[9px] font-bold uppercase tracking-widest text-[#E7AC9A]">Esquema Reología - Reactor 1</h3>
+            
+            <!-- Graphic Scheme -->
+            <div class="w-full h-80 flex items-center justify-center gap-8 relative mt-6">
+                <div class="w-48 h-64 border-4 border-gray-600 rounded-b-[60px] rounded-t-3xl relative bg-black/40 overflow-hidden flex flex-col justify-end items-center">
+                    <!-- Emulsion liquid layer -->
+                    <div id="reactor-liquid" class="w-full bg-gradient-to-t from-[#FB7185]/30 to-[#E7AC9A]/20 transition-all duration-300 relative border-t-2 border-white/20" style="height: 40%;">
+                        <div class="absolute inset-0 bg-white/5 animate-pulse"></div>
+                    </div>
+
+                    <!-- Agitator motor shaft -->
+                    <div class="absolute top-0 w-2 h-48 bg-gradient-to-r from-gray-400 to-gray-500"></div>
+                    <div class="absolute bottom-16 w-24 h-5 bg-gray-500 rounded transition-all duration-100" id="reactor-blade-1"></div>
+                    <div class="absolute bottom-28 w-20 h-5 bg-gray-500 rounded transition-all duration-100" id="reactor-blade-2"></div>
+                    
+                    <!-- Inside Temperature Badge -->
+                    <div class="absolute top-12 left-4 bg-black/80 border border-white/10 rounded-lg p-2 text-center flex flex-col z-20">
+                        <span class="text-[7px] text-gray-500 font-mono">T_SENSOR</span>
+                        <span class="font-mono text-xs font-bold text-orange-400" id="lbl-sensor-temp">25.0°C</span>
+                    </div>
+
+                    <!-- Inside RPM Badge -->
+                    <div class="absolute top-12 right-4 bg-black/80 border border-white/10 rounded-lg p-2 text-center flex flex-col z-20">
+                        <span class="text-[7px] text-gray-500 font-mono">RPM_SENSOR</span>
+                        <span class="font-mono text-xs font-bold text-green-400" id="lbl-sensor-rpm">0 RPM</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Process Controls Panel (3 Cols) -->
+        <div class="lg:col-span-3 flex flex-col gap-4">
+            <!-- Controls Card -->
+            <div class="bg-[#121118] border border-white/5 rounded-3xl p-5 flex flex-col gap-4">
+                <h3 class="text-[10px] font-bold uppercase tracking-widest text-[#E7AC9A] border-b border-white/5 pb-2">Controles de Actuadores</h3>
+                
+                <div class="flex flex-col gap-1.5">
+                    <div class="flex justify-between text-xs">
+                        <span>Velocidad de Cizalla:</span>
+                        <span class="font-mono text-green-400 font-bold" id="ctrl-rpm-lbl">0 RPM</span>
+                    </div>
+                    <input type="range" id="ctrl-rpm" min="0" max="2200" step="50" value="0" class="w-full accent-[#E7AC9A]" oninput="updateIndustrialInputs()">
+                    <span class="text-[8px] text-gray-500">Rango de emulsión: 1300-1700 RPM</span>
+                </div>
+
+                <div class="flex items-center justify-between border-t border-white/5 pt-3">
+                    <div>
+                        <span class="text-xs block">Resistencia Calefactora:</span>
+                        <span class="text-[8px] text-gray-500">Para pasteurización microbiana</span>
+                    </div>
+                    <button onclick="toggleHeater()" id="btn-heater" class="text-xs bg-red-950 border border-red-700/50 text-red-400 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all">
+                        Apagado
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between border-t border-white/5 pt-3">
+                    <div>
+                        <span class="text-xs block">Camisa de Enfriamiento:</span>
+                        <span class="text-[8px] text-gray-500">Agua circulante refrigerada</span>
+                    </div>
+                    <button onclick="toggleCooling()" id="btn-cooling" class="text-xs bg-blue-950 border border-blue-700/50 text-blue-400 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all">
+                        Apagado
+                    </button>
+                </div>
+
+                <div class="flex items-center justify-between border-t border-white/5 pt-3">
+                    <div>
+                        <span class="text-xs block">Válvula de Salida Lote:</span>
+                        <span class="text-[8px] text-gray-500">Descarga a envasadora estéril</span>
+                    </div>
+                    <button onclick="toggleOutlet()" id="btn-outlet" class="text-xs bg-green-950 border border-green-700/50 text-green-400 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all">
+                        Cerrada
+                    </button>
+                </div>
+            </div>
+
+            <!-- BPL Checklist (Good Laboratory Practices / INVIMA guidelines) -->
+            <div class="bg-[#121118] border border-white/5 rounded-3xl p-5 flex flex-col gap-3">
+                <h4 class="text-[9px] font-bold text-[#80ba41] uppercase tracking-widest">Protocolo BPL (INVIMA)</h4>
+                <div class="flex flex-col gap-2 text-[10px] text-gray-400">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="chk-calib-temp" class="accent-[#80ba41] w-3.5 h-3.5 rounded" onchange="checkBplStatus()">
+                        <span>Calibración de termocupla</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="chk-calib-ph" class="accent-[#80ba41] w-3.5 h-3.5 rounded" onchange="checkBplStatus()">
+                        <span>Calibración de pH-metro</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="chk-sterility-seal" class="accent-[#80ba41] w-3.5 h-3.5 rounded" onchange="checkBplStatus()">
+                        <span>Verificación de sello estéril</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Diagnostic Console logs (4 Cols) -->
+        <div class="lg:col-span-4 flex flex-col gap-4">
+            
+            <!-- Quality Parameters INVIMA -->
+            <div class="bg-[#121118] border border-white/5 rounded-3xl p-5 flex flex-col gap-3.5">
+                <h3 class="text-[10px] font-bold uppercase tracking-widest text-[#E7AC9A] border-b border-white/5 pb-2">Parámetros de Control Fisicoquímico</h3>
+                
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-gray-400">Viscosidad Reológica:</span>
+                    <span class="font-mono font-bold" id="ind-viscosity">1,200 cPs</span>
+                </div>
+                <div class="flex justify-between items-center border-t border-white/5 pt-2 text-xs">
+                    <span class="text-gray-400">pH Fisicoquímico:</span>
+                    <span class="font-mono font-bold text-green-400" id="ind-ph">5.50 pH</span>
+                </div>
+                <div class="flex justify-between items-center border-t border-white/5 pt-2 text-xs">
+                    <span class="text-gray-400">Diámetro Micelar (Nanos):</span>
+                    <span class="font-mono font-bold text-blue-400" id="ind-particles">145 nm</span>
+                </div>
+
+                <h3 class="text-[10px] font-bold uppercase tracking-widest text-[#E7AC9A] border-b border-white/5 pb-2 pt-2">Control de Pureza Microbiológica</h3>
+                
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-gray-400">Bacterias Mesófilas:</span>
+                    <span class="font-mono font-bold" id="ind-microbial">0 UFC/g</span>
+                </div>
+                <div class="flex justify-between items-center border-t border-white/5 pt-2 text-xs">
+                    <span class="text-gray-400">Patógenos (S. aureus & P. aeruginosa):</span>
+                    <span class="font-mono font-bold text-green-400" id="ind-pathogens">AUSENTE</span>
+                </div>
+            </div>
+
+            <!-- Alarm Log console -->
+            <div class="bg-[#121118] border border-white/5 rounded-3xl p-5 flex flex-col flex-1 min-h-[160px]">
+                <h3 class="text-[10px] font-bold uppercase tracking-widest text-[#E7AC9A] border-b border-white/5 pb-2 mb-3">Registros de Alarma SCADA</h3>
+                
+                <div id="industrial-logs" class="flex-1 overflow-y-auto text-[9px] font-mono flex flex-col gap-2 p-2 bg-black/30 rounded-xl border border-white/5">
+                    <div class="text-[#80ba41]">[00:00] SCADA: Monitoreo listo. Cumplimiento de normas INVIMA activo.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===== MODAL AUDITORÍA INDUSTRIAL FINAL (INVIMA Certified Layout) ===== -->
+<div id="ind-modal-final" style="display:none;position:fixed;inset:0;z-index:900;background:rgba(11,10,14,0.96);align-items:center;justify-content:center;padding:24px">
+    <div class="bg-[#121118] border-2 border-[#80ba41]/40 rounded-3xl p-8 max-w-xl w-full flex flex-col text-center gap-5 relative overflow-hidden">
+        
+        <!-- Watermark/Background logo shield -->
+        <div class="absolute -right-12 -top-12 opacity-5 pointer-events-none text-white">
+            <svg viewBox="0 0 100 100" class="w-48 h-48" fill="currentColor">
+                <path d="M50 5L15 20v35c0 20 15 35 35 40 20-5 35-20 35-40V20L50 5z"/>
+            </svg>
+        </div>
+
+        <div class="w-full flex flex-col items-center gap-1.5">
+            <div class="w-16 h-16 text-[#80ba41] flex items-center justify-center">
+                <svg viewBox="0 0 64 64" class="w-16 h-16" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M50 5L14 20v30c0 15 12 30 36 34 24-4 36-19 36-34V20L50 5z"/>
+                    <polyline points="44 26 28 42 20 34"/>
+                </svg>
+            </div>
+            <h2 class="serif text-3xl text-white font-bold">Certificado de Liberación de Lote</h2>
+            <p class="text-[9px] text-[#80ba41] font-bold uppercase tracking-widest">Normativa de Referencia INVIMA BPL / Resol. 3774</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 text-left font-mono text-xs border-y border-white/10 py-4 my-2">
+            <div>
+                <span class="text-gray-500 text-[9px] block">LOTE DE MANUFACTURA:</span>
+                <strong id="final-ind-volume" class="text-white text-sm">5000 Litros</strong>
+            </div>
+            <div>
+                <span class="text-gray-500 text-[9px] block">CONFORMIDAD DE REOLOGÍA:</span>
+                <strong id="final-ind-qc" class="text-green-400 text-sm">96%</strong>
+            </div>
+            <div class="mt-1">
+                <span class="text-gray-500 text-[9px] block">CONTAMINACIÓN MICROBIANA:</span>
+                <strong id="final-ind-micro" class="text-green-400 text-sm">0 UFC/g</strong>
+            </div>
+            <div class="mt-1">
+                <span class="text-gray-500 text-[9px] block">ESTADO DE REGISTRO SANITARIO:</span>
+                <strong id="final-ind-status" class="text-green-400 text-sm">CONFORME ✓</strong>
+            </div>
+        </div>
+
+        <p class="text-xs text-gray-400 leading-relaxed" id="final-ind-desc"></p>
+
+        <button onclick="location.reload()" class="bg-[#80ba41] text-white font-bold text-xs uppercase tracking-widest py-3.5 rounded-xl hover:bg-[#72a63a] transition-all w-full">
+            Registrar Lote y Finalizar
+        </button>
+    </div>
+</div>
+
+<script>
+/* ========================================================
+   ESTADO GLOBAL
+   ======================================================== */
+let indTimer = null;
+let indTemp = 25.0;
+let indRPM = 0;
+let indVolume = 0;
+let indQc = 100;
+let indHeaterActive = false;
+let indCoolingActive = false;
+let indOutletOpen = false;
+let indLogs = [];
+let batchStartTime = 0;
+let bplScore = 0; // Calibration checklist points
+
+function iniciarIndustrial() {
+    document.getElementById('start-screen').style.display = 'none';
+    document.getElementById('industrial-ui').style.display = 'flex';
+    document.body.style.background = '#0d0c12';
+    document.body.style.color = '#e2e8f0';
+    
+    indTemp = 25.0;
+    indRPM = 0;
+    indVolume = 0;
+    indQc = 100;
+    indHeaterActive = false;
+    indCoolingActive = false;
+    indOutletOpen = false;
+    bplScore = 0;
+    
+    // Clear checklist
+    document.getElementById('chk-calib-temp').checked = false;
+    document.getElementById('chk-calib-ph').checked = false;
+    document.getElementById('chk-sterility-seal').checked = false;
+    
+    indLogs = ["[00:00] SCADA: Monitoreo listo. Cumplimiento de normas INVIMA activo."];
+    batchStartTime = Date.now();
+    
+    updateIndustrialDom();
+    
+    if (indTimer) clearInterval(indTimer);
+    indTimer = setInterval(tickIndustrialSimulation, 1000);
+}
+
+function updateIndustrialInputs() {
+    indRPM = parseInt(document.getElementById('ctrl-rpm').value);
+    document.getElementById('ctrl-rpm-lbl').innerText = `${indRPM} RPM`;
+    document.getElementById('lbl-sensor-rpm').innerText = `${indRPM} RPM`;
+}
+
+function toggleHeater() {
+    indHeaterActive = !indHeaterActive;
+    const btn = document.getElementById('btn-heater');
+    if (indHeaterActive) {
+        btn.innerText = 'Encendido';
+        btn.className = 'text-xs bg-red-600 border border-red-400 text-white px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all';
+        addIndLog("Calefactor Activado. Temperatura elevándose.");
+    } else {
+        btn.innerText = 'Apagado';
+        btn.className = 'text-xs bg-red-950 border border-red-700/50 text-red-400 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all';
+        addIndLog("Calefactor Desactivado.");
+    }
+}
+
+function toggleCooling() {
+    indCoolingActive = !indCoolingActive;
+    const btn = document.getElementById('btn-cooling');
+    if (indCoolingActive) {
+        btn.innerText = 'Encendido';
+        btn.className = 'text-xs bg-blue-600 border border-blue-400 text-white px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all';
+        addIndLog("Enfriamiento activo por camisa refrigerada.");
+    } else {
+        btn.innerText = 'Apagado';
+        btn.className = 'text-xs bg-blue-950 border border-blue-700/50 text-blue-400 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all';
+        addIndLog("Enfriamiento Desactivado.");
+    }
+}
+
+function toggleOutlet() {
+    indOutletOpen = !indOutletOpen;
+    const btn = document.getElementById('btn-outlet');
+    if (indOutletOpen) {
+        btn.innerText = 'Abierta';
+        btn.className = 'text-xs bg-green-600 border border-green-400 text-white px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all';
+        addIndLog("Válvula de descarga del Lote Abierta.");
+    } else {
+        btn.innerText = 'Cerrada';
+        btn.className = 'text-xs bg-green-950 border border-green-700/50 text-green-400 px-4 py-2 rounded-xl font-bold uppercase tracking-wider transition-all';
+        addIndLog("Válvula de descarga Cerrada.");
+    }
+}
+
+function checkBplStatus() {
+    bplScore = 0;
+    if (document.getElementById('chk-calib-temp').checked) bplScore += 15;
+    if (document.getElementById('chk-calib-ph').checked) bplScore += 15;
+    if (document.getElementById('chk-sterility-seal').checked) bplScore += 20;
+    addIndLog("SCADA: Actualización de calibración de instrumental BPL.");
+}
+
+function addIndLog(msg) {
+    const timeSec = Math.floor((Date.now() - batchStartTime) / 1000);
+    const timeFormatted = `[00:${timeSec < 10 ? '0' + timeSec : timeSec}]`;
+    const logBox = document.getElementById('industrial-logs');
+    
+    const isWarning = msg.includes("ALERTA") || msg.includes("CRÍTICO") || msg.includes("DEGRADACIÓN");
+    const colorClass = isWarning ? 'text-red-400 font-bold animate-pulse' : 'text-gray-400';
+    
+    logBox.innerHTML += `<div class="${colorClass}">${timeFormatted} ${msg}</div>`;
+    logBox.scrollTop = logBox.scrollHeight;
+}
+
+function tickIndustrialSimulation() {
+    // Temperature differential physics
+    let tempDelta = 0;
+    if (indHeaterActive) tempDelta += 1.8;
+    if (indCoolingActive) tempDelta -= 2.4;
+    tempDelta += (indRPM * 0.0007); // shear friction
+    tempDelta += (25.0 - indTemp) * 0.04; // dissipation
+    
+    indTemp += tempDelta;
+    if (indTemp < 10) indTemp = 10;
+
+    // Viscosity calculation based on physical stability
+    let viscosity = Math.round(15500 * Math.exp(-0.038 * (indTemp - 25)));
+    if (indTemp < 30) viscosity += 3000;
+    
+    // Microbiological contamination risk factor
+    // High temperatures pasteurize (reduce contamination to 0)
+    // Low temperatures under bad BPL cause rapid bacterial growth
+    let mesophilicCount = 0;
+    let pathogensStatus = "AUSENTE";
+    
+    if (indTemp < 40.0) {
+        // If sterility check is missing, bacteria grows
+        const sterilityChecked = document.getElementById('chk-sterility-seal').checked;
+        if (!sterilityChecked) {
+            mesophilicCount = Math.round(Math.pow(1.8, (Date.now() - batchStartTime)/4000));
+            if (mesophilicCount > 50) pathogensStatus = "S. AUREUS DETECTADO ⚠️";
+        }
+    }
+
+    // Quality Score (INVIMA conformity checks)
+    let qcPenalty = 0;
+    
+    // 1. Temp violations
+    if (indTemp > 56.0) {
+        qcPenalty += 2.0;
+        addIndLog("⚠️ ALERTA: Temperatura excede límite crítico (>55°C). DEGRADACIÓN DE BIOACTIVOS.");
+    }
+    // 2. Agitation RPM bounds
+    if (indRPM > 0 && (indRPM < 1300 || indRPM > 1700)) {
+        qcPenalty += 0.8;
+        addIndLog("⚠️ ADVERTENCIA INVIMA: Cizallamiento fuera de especificación. Fórmulas propensa a separación.");
+    }
+    // 3. Uncalibrated equipment penalties (BPL)
+    const calibTemp = document.getElementById('chk-calib-temp').checked;
+    const calibPh = document.getElementById('chk-calib-ph').checked;
+    if (!calibTemp || !calibPh) {
+        qcPenalty += 0.4; // constant degradation of compliance for lack of BPL
+    }
+    // 4. Microbiological penalty
+    if (mesophilicCount > 100) {
+        qcPenalty += 4.0;
+        addIndLog("🚨 ALERTA CRÍTICA: Contaminación microbiológica excede límite normativo (>100 UFC/g).");
+    }
+
+    indQc = Math.max(10, indQc - qcPenalty);
+
+    // Outlet discharge processing
+    if (indOutletOpen) {
+        if (indRPM >= 1300 && indTemp >= 40.0 && indTemp <= 55.0) {
+            indVolume += Math.round(150 * (indRPM / 1500));
+            addIndLog("✓ Reactor descargando: Emulsificación homogeneizada a envasadora.");
+        } else {
+            indVolume += 50;
+            indQc = Math.max(10, indQc - 2.8);
+            addIndLog("⚠️ ALERTA: Descargando fluido fuera de rango de viscosidad/estabilidad.");
+        }
+    }
+    
+    if (indVolume >= 5000) {
+        indVolume = 5000;
+        finishIndustrialBatch(mesophilicCount, pathogensStatus);
+    }
+    
+    updateIndustrialDom(viscosity, mesophilicCount, pathogensStatus);
+}
+
+function updateIndustrialDom(viscosity, mesophilicCount, pathogensStatus) {
+    document.getElementById('ind-volume').innerText = `${indVolume} L`;
+    document.getElementById('lbl-sensor-temp').innerText = `${indTemp.toFixed(1)}°C`;
+    document.getElementById('lbl-sensor-rpm').innerText = `${indRPM} RPM`;
+    
+    const qcEl = document.getElementById('ind-qc');
+    qcEl.innerText = `${Math.round(indQc)}%`;
+    if (indQc < 70) {
+        qcEl.className = 'font-mono text-2xl text-red-500 font-bold';
+    } else if (indQc < 88) {
+        qcEl.className = 'font-mono text-2xl text-yellow-400 font-bold';
+    } else {
+        qcEl.className = 'font-mono text-2xl text-[#80ba41] font-bold';
+    }
+
+    // Viscosity, pH and micelle size calculations
+    document.getElementById('ind-viscosity').innerText = `${viscosity.toLocaleString('es-CO')} cPs`;
+    document.getElementById('ind-ph').innerText = `${(5.50 + (100 - indQc) * 0.008).toFixed(2)} pH`;
+    document.getElementById('ind-particles').innerText = `${Math.round(140 + (100 - indQc) * 1.3)} nm`;
+
+    // Microbial UI display
+    const microEl = document.getElementById('ind-microbial');
+    microEl.innerText = `${mesophilicCount} UFC/g`;
+    if (mesophilicCount > 100) {
+        microEl.className = 'font-mono text-xs font-bold text-red-500';
+    } else {
+        microEl.className = 'font-mono text-xs font-bold text-green-400';
+    }
+
+    const pathEl = document.getElementById('ind-pathogens');
+    pathEl.innerText = pathogensStatus;
+    if (pathogensStatus !== "AUSENTE") {
+        pathEl.className = 'font-mono text-xs font-bold text-red-500';
+    } else {
+        pathEl.className = 'font-mono text-xs font-bold text-green-400';
+    }
+
+    // Visual agitation blade scales
+    const blade1 = document.getElementById('reactor-blade-1');
+    const blade2 = document.getElementById('reactor-blade-2');
+    if (blade1 && blade2 && indRPM > 0) {
+        const scaleVal = 0.5 + 0.5 * Math.sin(Date.now() * 0.01 * (indRPM / 500));
+        blade1.style.transform = `scaleX(${scaleVal})`;
+        blade2.style.transform = `scaleX(${scaleVal})`;
+    }
+
+    // Reactor filling dynamics
+    const liq = document.getElementById('reactor-liquid');
+    if (liq) {
+        const fillPct = Math.max(5, 75 - (indVolume / 5000 * 70));
+        liq.style.height = `${fillPct}%`;
+    }
+}
+
+function finishIndustrialBatch(mesophilicCount, pathogensStatus) {
+    clearInterval(indTimer);
+    
+    const modal = document.getElementById('ind-modal-final');
+    modal.style.display = 'flex';
+    
+    document.getElementById('final-ind-volume').innerText = "5000 Litros";
+    document.getElementById('final-ind-qc').innerText = `${Math.round(indQc)}%`;
+    document.getElementById('final-ind-micro').innerText = `${mesophilicCount} UFC/g`;
+    
+    const statusEl = document.getElementById('final-ind-status');
+    const descEl = document.getElementById('final-ind-desc');
+    
+    // Check if BPL was fully complied with
+    const bplOK = bplScore === 50; 
+    
+    if (indQc >= 85 && mesophilicCount <= 100 && pathogensStatus === "AUSENTE" && bplOK) {
+        statusEl.innerText = "LOTE CONFORME ✓ REGISTRO INVIMA LIBERADO";
+        statusEl.className = "text-[#80ba41] text-sm font-bold";
+        descEl.innerText = "El lote de 5,000 Litros cumple con todos los estándares fisicoquímicos y de control de calidad microbiológica de INVIMA. Las bitácoras BPL están validadas.";
+    } else if (indQc >= 65 && mesophilicCount <= 300) {
+        statusEl.innerText = "LIBERACIÓN CONDICIONAL ⚠️ REPROCESAMIENTO";
+        statusEl.className = "text-yellow-400 text-sm font-bold";
+        descEl.innerText = "El lote cumple parcialmente. Presenta desviaciones menores de reología o pH por falta de calibración en termocupla/pH-metro. Requiere re-homogeneización.";
+    } else {
+        statusEl.innerText = "LOTE RECHAZADO ❌ DECOMISO RECOMENDADO";
+        statusEl.className = "text-red-500 text-sm font-bold";
+        descEl.innerText = "RECHAZADO: No cumple con los criterios de seguridad microbiológica de INVIMA o sufrió una desestabilización fisicoquímica grave. Lote bloqueado para distribución.";
+    }
+}
+</script>
+</body>
+</html>

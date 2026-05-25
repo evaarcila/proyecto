@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emma Glow | Enterprise AI Skincare & Haircare</title>
+    
+    <!-- CDNs -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- MediaPipe Face Mesh -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&family=Chewy&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Jost"', 'sans-serif'],
+                        serif: ['"Chewy"', 'cursive'],
+                    },
+                    colors: {
+                        emma: {
+                            almond: '#F3DAD8',
+                            tickled: '#F47FBE',
+                            gold: '#FFD700',
+                            dark: '#2D1B1B',
+                            glass: 'rgba(255, 255, 255, 0.45)',
+                        }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'blob': 'blob 7s infinite',
+                        'pulse-glow': 'pulseGlow 2s infinite',
+                        'pop-in': 'popIn 0.5s ease-out forwards',
+                    },
+                    keyframes: {
+                        blob: {
+                            '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
+                            '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                            '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                        },
+                        pulseGlow: {
+                            '0%, 100%': { boxShadow: '0 0 15px rgba(244, 127, 190, 0.4)' },
+                            '50%': { boxShadow: '0 0 25px rgba(244, 127, 190, 0.8)' },
+                        },
+                        popIn: {
+                            '0%': { transform: 'scale(0.8)', opacity: 0 },
+                            '100%': { transform: 'scale(1)', opacity: 1 },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background: radial-gradient(circle at 10% 20%, rgb(255, 255, 255) 0%, rgb(253, 235, 237) 50%, rgb(243, 218, 216) 90%);
+            background-attachment: fixed;
+            color: #2D1B1B;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .font-serif {
+            font-family: 'Chewy', cursive !important;
+            letter-spacing: 0.05em;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(25px);
+            -webkit-backdrop-filter: blur(25px);
+            border: 2px solid rgba(255, 255, 255, 1);
+            box-shadow: 8px 8px 0px rgba(244, 127, 190, 0.15);
+            border-radius: 30px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #F47FBE; border-radius: 10px; }
+
+        /* Camera and UV Effect */
+        #video-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4/3;
+            background: #000;
+            border-radius: 24px;
+            overflow: hidden;
+            border: 4px solid white;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        #webcam {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+            transition: filter 1s ease-in-out;
+        }
+
+        /* The Dark UV Wood's Lamp Filter Effect */
+        .uv-mode {
+            filter: brightness(0.3) contrast(1.5) saturate(1.8) sepia(1) hue-rotate(240deg);
+        }
+
+        #output_canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+
+        /* Chatbot UI */
+        #chatbot-window {
+            transition: all 0.3s ease;
+            transform-origin: bottom right;
+        }
+        .chat-bubble-user {
+            background: #F47FBE; color: white;
+            border-radius: 18px 18px 4px 18px;
+            padding: 10px 14px;
+            align-self: flex-end;
+            max-width: 85%;
+        }
+        .chat-bubble-ai {
+            background: white; color: #2D1B1B;
+            border: 1px solid #F3DAD8;
+            border-radius: 18px 18px 18px 4px;
+            padding: 10px 14px;
+            align-self: flex-start;
+            max-width: 85%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+
+        .btn-premium {
+            background: linear-gradient(135deg, #2D1B1B 0%, #4A2B2B 100%);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        .btn-premium:hover {
+            background: linear-gradient(135deg, #F47FBE 0%, #E7AC9A 100%);
+            transform: scale(1.02);
+            box-shadow: 0 8px 15px rgba(244, 127, 190, 0.3);
+        }
+
+        /* Nav Item active states */
+        .nav-item {
+            cursor: pointer;
+            padding: 8px 16px;
+            border-radius: 16px;
+            transition: all 0.3s;
+            font-weight: 700;
+            color: #9CA3AF;
+        }
+        .nav-item:hover { color: #2D1B1B; background: rgba(255,255,255,0.5); }
+        .nav-item.active {
+            background: white; color: #F47FBE;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col pb-12 relative overflow-x-hidden">
+
+    <!-- Ambient background blobs -->
+    <div class="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#F47FBE]/20 rounded-full blur-3xl animate-blob -z-10"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#E7AC9A]/30 rounded-full blur-3xl animate-blob -z-10" style="animation-delay: 2s;"></div>
+
+    <!-- Login Modal -->
+    <div id="login-modal" class="fixed inset-0 z-[100] flex items-center justify-center bg-white/40 backdrop-blur-md">
+        <div class="glass-panel p-10 max-w-md w-full flex flex-col items-center text-center animate-pop-in">
+            <h1 class="font-serif text-6xl text-emma-tickled mb-2">Emma Glow</h1>
+            <p class="text-xs text-gray-500 font-bold mb-8 uppercase tracking-widest">Enterprise Clinical AR Platform</p>
+            
+            <div class="w-full flex flex-col gap-4">
+                <input type="text" id="login-username" placeholder="Nombre de Usuario" class="w-full bg-white border-2 border-gray-200 rounded-2xl px-5 py-3 outline-none focus:border-emma-tickled font-medium">
+                <input type="password" id="login-password" placeholder="Contraseña Segura" class="w-full bg-white border-2 border-gray-200 rounded-2xl px-5 py-3 outline-none focus:border-emma-tickled font-medium">
+                <button onclick="handleLogin()" class="w-full btn-premium py-4 rounded-2xl font-bold text-lg mt-2 shadow-lg">Entrar al Laboratorio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Navigation Bar -->
+    <header class="h-24 border-b-2 border-white bg-white/60 backdrop-blur-xl px-8 sticky top-0 z-50 flex flex-col justify-center">
+        <div class="flex items-center justify-between w-full max-w-[1400px] mx-auto">
+            <div class="flex items-center gap-3">
+                <h1 class="font-serif text-4xl text-emma-tickled">Emma Glow</h1>
+            </div>
+
+            <!-- Central Nav -->
+            <nav class="hidden md:flex items-center gap-2 bg-white/40 p-1.5 rounded-2xl border border-white">
+                <div id="nav-diag" onclick="navigateTo('diag')" class="nav-item active flex items-center gap-2">
+                    <span>📸</span> Escáner Clínico
+                </div>
+                <div id="nav-res" onclick="navigateTo('res')" class="nav-item flex items-center gap-2 opacity-50 pointer-events-none">
+                    <span>📊</span> Resultados
+                </div>
+                <div id="nav-ar" onclick="navigateTo('ar')" class="nav-item flex items-center gap-2 opacity-50 pointer-events-none">
+                    <span>✨</span> Aplicación AR
+                </div>
+            </nav>
+
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-3 bg-white/80 px-4 py-2 rounded-2xl border border-white shadow-sm">
+                    <div class="w-8 h-8 rounded-full bg-emma-almond flex items-center justify-center">👤</div>
+                    <div class="flex flex-col">
+                        <span class="text-xs text-gray-500 font-bold uppercase" id="header-username">Invitado</span>
+                    </div>
+                    <button onclick="logout()" class="ml-2 text-[10px] font-bold text-red-400 hover:text-red-600 underline">Salir</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="max-w-[1400px] w-full mx-auto px-4 md:px-8 mt-8 flex flex-col items-center">
+        
+        <!-- =======================
+             VIEW 1: SCANNER 
+             ======================= -->
+        <section id="view-diag" class="w-full max-w-5xl flex flex-col gap-6 animate-pop-in">
+            <div class="glass-panel p-8 flex flex-col lg:flex-row gap-8">
+                <!-- Camera Box -->
+                <div class="flex-1 flex flex-col gap-4">
+                    <div class="flex justify-between items-center">
+                        <h2 class="font-bold text-xl text-emma-dark">Visión Computacional</h2>
+                        <span id="uv-badge" class="bg-purple-100 text-purple-600 text-xs font-bold px-3 py-1 rounded-full border border-purple-200 hidden animate-pulse">Analizador UV Activo</span>
+                    </div>
+                    
+                    <!-- Mode Toggles -->
+                    <div class="flex bg-white/60 p-1.5 rounded-2xl border border-white relative shadow-sm mb-2">
+                        <button onclick="switchMode('facial')" id="tab-facial" class="flex-1 py-2 rounded-xl text-sm font-bold transition-all bg-white text-emma-dark shadow-sm">
+                            ✨ Diagnóstico Facial
+                        </button>
+                        <button onclick="switchMode('capilar')" id="tab-capilar" class="flex-1 py-2 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-emma-dark">
+                            🧬 Diagnóstico Capilar
+                        </button>
+                    </div>
+
+                    <div id="video-container">
+                        <video id="webcam" autoplay playsinline></video>
+                        <canvas id="output_canvas"></canvas>
+                        
+                        <!-- Initializing overlay -->
+                        <div id="cam-loading" class="absolute inset-0 bg-white/80 backdrop-blur flex flex-col items-center justify-center z-30 transition-opacity">
+                            <div class="w-12 h-12 border-4 border-emma-tickled border-t-transparent rounded-full animate-spin mb-4"></div>
+                            <p class="font-bold text-gray-600">Conectando MediaPipe Edge...</p>
+                        </div>
+                    </div>
+
+                    <button onclick="startUVScan()" id="btn-scan" class="w-full btn-premium py-4 rounded-2xl font-bold text-lg uppercase tracking-widest flex items-center justify-center gap-2">
+                        <span>🔬 Iniciar Escáner Profundo (UV)</span>
+                    </button>
+                </div>
+
+                <!-- Info Box -->
+                <div class="w-full lg:w-72 flex flex-col gap-4">
+                    <div class="bg-white/80 border border-white rounded-2xl p-5 shadow-sm">
+                        <h3 class="font-bold text-sm uppercase tracking-wider text-emma-tickled mb-3">¿Qué detectamos?</h3>
+                        <ul id="info-list" class="text-sm text-gray-600 space-y-3 font-medium">
+                            <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Poros / Sebo</li>
+                            <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-400"></span> Zonas Deshidratadas</li>
+                            <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-400"></span> Inflamación / Acné</li>
+                        </ul>
+                        <p class="text-xs text-gray-400 mt-5 leading-relaxed">
+                            El modo "Lámpara de Wood" oscurece el espectro visible para resaltar mediante inteligencia artificial tus marcadores biológicos en tiempo real.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             VIEW 2: RESULTADOS 
+             ======================= -->
+        <section id="view-res" class="w-full hidden animate-pop-in flex flex-col lg:flex-row gap-8">
+            <!-- Metrics & Graph -->
+            <div class="flex-1 flex flex-col gap-6">
+                <div class="glass-panel p-8">
+                    <div class="flex justify-between items-center mb-6">
+                        <h2 class="font-serif text-3xl text-emma-tickled">Reporte Clínico</h2>
+                        <span id="score-badge" class="bg-green-100 text-green-600 font-bold px-4 py-1.5 rounded-full border border-green-200">Salud: 85%</span>
+                    </div>
+
+                    <div id="metrics-grid" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                        <!-- Populated by JS -->
+                    </div>
+
+                    <h3 class="font-bold text-lg text-emma-dark mb-4">Evolución de tu Perfil</h3>
+                    <div class="h-48 w-full bg-white/50 rounded-2xl border border-white p-3">
+                        <canvas id="historyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations -->
+            <div class="w-full lg:w-96 flex flex-col gap-6">
+                <div class="glass-panel p-6 bg-gradient-to-br from-white/80 to-emma-almond/80">
+                    <h3 class="font-serif text-2xl text-emma-dark mb-4">Rutina Prescrita</h3>
+                    <div id="recommendations-container" class="flex flex-col gap-4 overflow-y-auto max-h-[50vh]"></div>
+                    
+                    <button onclick="navigateTo('ar')" class="w-full mt-6 btn-premium bg-emma-tickled py-4 rounded-2xl font-bold uppercase tracking-wider shadow-lg flex justify-center items-center gap-2">
+                        <span>Ir a Aplicación AR 🎮</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- =======================
+             VIEW 3: APLICACIÓN AR (GAMIFICACIÓN)
+             ======================= -->
+        <section id="view-ar" class="w-full max-w-5xl hidden flex-col gap-6 animate-pop-in">
+            <div class="glass-panel p-8 flex flex-col items-center">
+                <div class="text-center mb-6">
+                    <h2 class="font-serif text-4xl text-emma-tickled mb-2">Simulador de Masaje en AR</h2>
+                    <p class="text-gray-500 font-medium">Mírate en la cámara. La mano digital te guiará en tiempo real sobre tu propio cuerpo.</p>
+                </div>
+                
+                <div class="w-full max-w-2xl mx-auto">
+                    <!-- AR Video Slot -->
+                    <div id="ar-video-slot" class="w-full rounded-3xl overflow-hidden shadow-2xl border-4 border-emma-tickled"></div>
+                </div>
+
+                <div class="mt-8 bg-white/80 px-8 py-4 rounded-2xl border border-white flex gap-6 items-center">
+                    <span class="text-4xl animate-bounce">👆</span>
+                    <div>
+                        <h4 id="ar-instruction-title" class="font-bold text-lg text-emma-dark">Paso 1: Aplicación</h4>
+                        <p id="ar-instruction-desc" class="text-sm text-gray-600">Sigue la mano amarilla en tu pantalla.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Floating Chatbot Widget -->
+    <div class="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+        <div id="chatbot-window" class="glass-panel w-80 h-96 flex flex-col overflow-hidden scale-0 opacity-0 mb-2">
+            <div class="bg-emma-tickled p-4 flex items-center justify-between">
+                <div class="flex items-center gap-3 text-white">
+                    <div class="w-8 h-8 bg-white rounded-full flex items-center justify-center text-xl">👩‍⚕️</div>
+                    <div>
+                        <p class="font-bold text-sm leading-tight">Dra. Emma AI</p>
+                        <p class="text-[9px] uppercase tracking-wider text-white/80">Laboratorio Clínico</p>
+                    </div>
+                </div>
+                <button onclick="toggleChat()" class="text-white hover:text-gray-200">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            
+            <div id="chat-messages" class="flex-1 bg-white/50 p-4 overflow-y-auto flex flex-col gap-3 text-sm">
+                <div class="chat-bubble-ai">
+                    ¡Hola! Soy tu asistente de Emma Glow. Puedo resolver dudas sobre los productos que te prescribimos o enseñarte más técnicas de aplicación.
+                </div>
+            </div>
+            
+            <div class="p-3 bg-white border-t border-gray-100 flex gap-2">
+                <input type="text" id="chat-input" placeholder="Pregunta algo..." class="flex-1 bg-gray-50 rounded-full px-4 outline-none border border-gray-200 focus:border-emma-tickled text-sm" onkeypress="handleChatKey(event)">
+                <button onclick="sendMessage()" class="w-10 h-10 bg-emma-dark text-white rounded-full flex items-center justify-center hover:bg-emma-tickled">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <button onclick="toggleChat()" id="chat-trigger" class="w-16 h-16 btn-premium rounded-full flex items-center justify-center shadow-2xl relative animate-pulse-glow">
+            <span class="text-3xl">✨</span>
+            <span class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white"></span>
+        </button>
+    </div>
+
+    <!-- Scripts and Logic -->
+    <script>
+        // --- Products Database (From Excel) ---
+        const PRODUCTS_SKINCARE = [
+            { marca: 'CeraVe', nombre: 'Limpiador Hidratante', desc: 'Limpiador facial diario para piel normal a seca con ceramidas.', precio: '$18.50' },
+            { marca: 'The Ordinary', nombre: 'Sérum Ácido Hialurónico 2% + B5', desc: 'Sérum a base de agua para una hidratación profunda.', precio: '$9.90' },
+            { marca: 'La Roche-Posay', nombre: 'Crema Effaclar Mat', desc: 'Hidratante libre de aceite que matifica y reduce poros.', precio: '$24.00' },
+            { marca: "Paula's Choice", nombre: 'Tónico Exfoliante 2% BHA Liquid', desc: 'Exfoliante fluido que elimina células muertas y limpia poros.', precio: '$34.00' },
+            { marca: 'RoC', nombre: 'Crema de Noche Retinol Correxion', desc: 'Reduce visiblemente líneas y arrugas.', precio: '$29.99' },
+            { marca: 'Garnier', nombre: 'Agua Micelar Todo en 1', desc: 'Limpia, desmaquilla y calma todo el rostro.', precio: '$8.50' },
+            { marca: 'Laneige', nombre: 'Water Bank', desc: 'Crema en gel con ácido hialurónico azul.', precio: '$40.00' },
+            { marca: 'Mario Badescu', nombre: 'Tratamiento Secante de Acné', desc: 'Loción bifásica para secar espinillas rápidamente.', precio: '$18.00' },
+        ];
+
+        const PRODUCTS_HAIR = [
+            { marca: 'Moroccanoil', nombre: 'Champú Hidratante de Argán', desc: 'Limpia e hidrata aportando aceite de argán antioxidante.', precio: '$26.00' },
+            { marca: 'Olaplex', nombre: 'Acondicionador No.5', desc: 'Altamente hidratante que protege y repara el cabello dañado.', precio: '$30.00' },
+            { marca: 'Kérastase', nombre: 'Mascarilla Reparadora Inside Hair', desc: 'Tratamiento profundo para reconstruir la fibra capilar.', precio: '$52.00' },
+            { marca: 'Biolage', nombre: 'Sérum Scalp Sync Purifying', desc: 'Equilibra niveles de grasa y calma la irritación.', precio: '$23.00' },
+            { marca: 'Revlon', nombre: 'Leave-In UniqOne', desc: 'Tratamiento en spray multibeneficios para reparar.', precio: '$16.90' },
+            { marca: 'Living Proof', nombre: 'Champú Seco Perfect Day', desc: 'Limpia absorbiendo sudor y aceite.', precio: '$28.00' },
+            { marca: "L'Oréal", nombre: 'Champú Anticaspa Scalp Advanced', desc: 'Elimina la caspa visible del cuero cabelludo graso.', precio: '$27.00' },
+            { marca: 'The Ordinary', nombre: 'Aceite de Densidad Capilar', desc: 'Fórmula para favorecer la salud del cabello.', precio: '$18.90' },
+        ];
+
+        // --- State Management ---
+        let currentUser = null;
+        let currentView = 'diag'; // 'diag' | 'res' | 'ar'
+        let activeMode = 'facial'; // 'facial' | 'capilar'
+        let chartInstance = null;
+        
+        let isUvScanning = false;
+        let isArMode = false;
+        let uvScanProgress = 0; 
+        
+        let userHistory = { facial: [], capilar: [] };
+
+        // --- Initialization ---
+        window.onload = () => {
+            checkLogin();
+            initChart();
+            initMediaPipe();
+            updateInfoList();
+        };
+
+        // --- Auth System ---
+        function checkLogin() {
+            const savedUser = localStorage.getItem('emma_user');
+            if(savedUser) {
+                currentUser = savedUser;
+                document.getElementById('login-modal').style.display = 'none';
+                document.getElementById('header-username').innerText = currentUser;
+                loadHistory();
+            } else {
+                document.getElementById('login-modal').style.display = 'flex';
+            }
+        }
+
+        function handleLogin() {
+            const user = document.getElementById('login-username').value.trim();
+            if(user.length > 2) {
+                localStorage.setItem('emma_user', user);
+                checkLogin();
+            } else {
+                alert("Por favor ingresa un nombre válido.");
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('emma_user');
+            location.reload();
+        }
+
+        function loadHistory() {
+            const sF = localStorage.getItem(`emma_hist_facial_${currentUser}`);
+            const sC = localStorage.getItem(`emma_hist_capilar_${currentUser}`);
+            userHistory.facial = sF ? JSON.parse(sF) : generateMockHistory();
+            userHistory.capilar = sC ? JSON.parse(sC) : generateMockHistory();
+            updateChart();
+        }
+
+        function saveHistory() {
+            localStorage.setItem(`emma_hist_facial_${currentUser}`, JSON.stringify(userHistory.facial));
+            localStorage.setItem(`emma_hist_capilar_${currentUser}`, JSON.stringify(userHistory.capilar));
+            updateChart();
+        }
+
+        function generateMockHistory() {
+            let hist = [];
+            let today = new Date();
+            for(let i=4; i>=0; i--) {
+                let d = new Date();
+                d.setDate(today.getDate() - (i*3));
+                hist.push({ date: `${d.getDate()}/${d.getMonth()+1}`, score: 60 + (4-i)*5 + Math.floor(Math.random()*5) });
+            }
+            return hist;
+        }
+
+        // --- Modes & Navigation Logic ---
+        function switchMode(mode) {
+            activeMode = mode;
+            
+            document.getElementById('tab-facial').className = mode === 'facial' ? 
+                'flex-1 py-2 rounded-xl text-sm font-bold transition-all bg-white text-emma-dark shadow-sm' : 
+                'flex-1 py-2 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-emma-dark hover:bg-white/50';
+                
+            document.getElementById('tab-capilar').className = mode === 'capilar' ? 
+                'flex-1 py-2 rounded-xl text-sm font-bold transition-all bg-white text-emma-dark shadow-sm' : 
+                'flex-1 py-2 rounded-xl text-sm font-bold transition-all text-gray-500 hover:text-emma-dark hover:bg-white/50';
+
+            updateInfoList();
+            
+            // Relock nav items
+            document.getElementById('nav-res').classList.add('opacity-50', 'pointer-events-none');
+            document.getElementById('nav-ar').classList.add('opacity-50', 'pointer-events-none');
+        }
+
+        function updateInfoList() {
+            const list = document.getElementById('info-list');
+            if(activeMode === 'facial') {
+                list.innerHTML = `
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Poros / Sebo</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-400"></span> Zonas Deshidratadas</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-400"></span> Inflamación / Acné</li>
+                `;
+            } else {
+                list.innerHTML = `
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-400"></span> Sebo en Cuero Cabelludo</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-400"></span> Porosidad / Frizz</li>
+                    <li class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-400"></span> Daño Estructural</li>
+                `;
+            }
+        }
+
+        function navigateTo(viewId) {
+            if(viewId === 'res' && document.getElementById('nav-res').classList.contains('opacity-50')) return;
+            if(viewId === 'ar' && document.getElementById('nav-ar').classList.contains('opacity-50')) return;
+
+            currentView = viewId;
+            isArMode = (viewId === 'ar');
+
+            ['diag', 'res', 'ar'].forEach(id => {
+                document.getElementById(`nav-${id}`).classList.remove('active');
+                document.getElementById(`view-${id}`).style.display = 'none';
+            });
+            document.getElementById(`nav-${viewId}`).classList.add('active');
+            document.getElementById(`view-${viewId}`).style.display = 'flex';
+
+            const camContainer = document.getElementById('video-container');
+            if(viewId === 'diag') {
+                document.getElementById('btn-scan').parentNode.insertBefore(camContainer, document.getElementById('btn-scan'));
+            } else if (viewId === 'ar') {
+                document.getElementById('ar-video-slot').appendChild(camContainer);
+                camContainer.classList.remove('border-4', 'border-white'); 
+                
+                // Update instruction text
+                if(activeMode === 'facial') {
+                    document.getElementById('ar-instruction-title').innerText = "Paso 1: Aplicación de Sérum";
+                    document.getElementById('ar-instruction-desc').innerText = "Sigue la mano amarilla. Masajea de forma ascendente en las mejillas para un efecto lifting.";
+                } else {
+                    document.getElementById('ar-instruction-title').innerText = "Paso 1: Aplicación de Tratamiento/Aceite";
+                    document.getElementById('ar-instruction-desc').innerText = "Sigue la mano amarilla. Haz movimientos circulares en el cuero cabelludo para estimular el folículo.";
+                }
+            }
+            
+            if(viewId === 'res') updateChart();
+        }
+
+        // --- MediaPipe FaceMesh & Camera Logic ---
+        let faceMesh;
+        let camera;
+        const videoElement = document.getElementById('webcam');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+
+        async function initMediaPipe() {
+            faceMesh = new FaceMesh({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+            }});
+
+            faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+            faceMesh.onResults(onResults);
+
+            camera = new Camera(videoElement, {
+                onFrame: async () => { await faceMesh.send({image: videoElement}); },
+                width: 640, height: 480
+            });
+            
+            try {
+                await camera.start();
+                document.getElementById('cam-loading').style.opacity = '0';
+                setTimeout(() => document.getElementById('cam-loading').style.display = 'none', 500);
+            } catch(e) {
+                document.getElementById('cam-loading').innerHTML = "<p class='text-red-500 font-bold'>Error de cámara.</p>";
+            }
+        }
+
+        function onResults(results) {
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+
+                if (isUvScanning) {
+                    drawUVEffect(landmarks);
+                }
+
+                if (isArMode) {
+                    drawArHandGuide(landmarks);
+                }
+            }
+            canvasCtx.restore();
+        }
+
+        // --- Feature 1: The Dark UV Scanner Effect ---
+        function drawUVEffect(landmarks) {
+            const drawBlotch = (pointIdx, color, radius, opacityMultiplier) => {
+                const p = landmarks[pointIdx];
+                const x = p.x * canvasElement.width;
+                const y = p.y * canvasElement.height;
+                const pulse = (Math.sin(Date.now() / 150) + 1) / 2; 
+                const op = Math.min(1, uvScanProgress * 2) * opacityMultiplier * (0.6 + pulse * 0.4);
+                
+                const grad = canvasCtx.createRadialGradient(x, y, 0, x, y, radius);
+                grad.addColorStop(0, `rgba(${color}, ${op})`);
+                grad.addColorStop(0.5, `rgba(${color}, ${op * 0.5})`);
+                grad.addColorStop(1, `rgba(${color}, 0)`);
+                
+                canvasCtx.fillStyle = grad;
+                canvasCtx.beginPath();
+                canvasCtx.arc(x, y, radius, 0, 2 * Math.PI);
+                canvasCtx.fill();
+            };
+
+            if (activeMode === 'facial') {
+                drawBlotch(4, '255, 230, 0', 30, 0.8); // nose
+                drawBlotch(205, '0, 255, 255', 40, 0.6); // L cheek
+                drawBlotch(425, '0, 255, 255', 40, 0.6); // R cheek
+                drawBlotch(10, '255, 50, 150', 35, 0.9); // forehead
+            } else {
+                // Scalp/Hair mode focuses on forehead and hairline
+                drawBlotch(10, '255, 230, 0', 40, 0.9); // top forehead (sebum)
+                drawBlotch(338, '0, 255, 255', 45, 0.7); // top left hairline (frizz/porosity)
+                drawBlotch(109, '0, 255, 255', 45, 0.7); // top right hairline
+                drawBlotch(297, '255, 50, 150', 35, 0.8); // temples (damage)
+            }
+
+            drawConnectors(canvasCtx, landmarks, FACEMESH_TESSELATION, {color: 'rgba(150, 50, 255, 0.15)', lineWidth: 0.5});
+        }
+
+        // --- Feature 2: Gamified Hand AR Application Guide ---
+        function drawArHandGuide(landmarks) {
+            const loopTime = 2500;
+            const t = (Date.now() % loopTime) / loopTime;
+            let curX, curY;
+
+            if (activeMode === 'facial') {
+                // Moving upward along the cheeks
+                let p1 = landmarks[214]; // bottom cheek
+                let p2 = landmarks[101]; // top cheek
+                curX = (p1.x + (p2.x - p1.x) * t) * canvasElement.width;
+                curY = (p1.y + (p2.y - p1.y) * t) * canvasElement.height;
+                
+                // Draw path line
+                canvasCtx.beginPath();
+                canvasCtx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
+                canvasCtx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
+                canvasCtx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+                canvasCtx.lineWidth = 4;
+                canvasCtx.setLineDash([10, 10]);
+                canvasCtx.stroke();
+                canvasCtx.setLineDash([]);
+                
+            } else {
+                // Circular motion on the top forehead/scalp area
+                let center = landmarks[10]; // top forehead
+                let cx = center.x * canvasElement.width;
+                let cy = center.y * canvasElement.height - 40; // slightly above forehead
+                let radius = 30;
+                let angle = t * Math.PI * 4; // 2 circles per loop
+                curX = cx + Math.cos(angle) * radius;
+                curY = cy + Math.sin(angle) * radius;
+
+                // Draw path circle
+                canvasCtx.beginPath();
+                canvasCtx.arc(cx, cy, radius, 0, 2*Math.PI);
+                canvasCtx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+                canvasCtx.lineWidth = 4;
+                canvasCtx.setLineDash([5, 5]);
+                canvasCtx.stroke();
+                canvasCtx.setLineDash([]);
+            }
+
+            // Draw Emoji Hand
+            canvasCtx.font = '60px Arial';
+            canvasCtx.textAlign = 'center';
+            canvasCtx.textBaseline = 'middle';
+            
+            // Glowing orb
+            canvasCtx.fillStyle = 'rgba(255, 215, 0, 0.4)';
+            canvasCtx.beginPath();
+            canvasCtx.arc(curX, curY, 35, 0, 2*Math.PI);
+            canvasCtx.fill();
+            
+            canvasCtx.fillText('👆', curX, curY);
+
+            // Floating instruction
+            canvasCtx.font = 'bold 18px Jost, sans-serif';
+            canvasCtx.fillStyle = '#fff';
+            canvasCtx.shadowColor = 'rgba(0,0,0,0.8)';
+            canvasCtx.shadowBlur = 4;
+            canvasCtx.fillText(activeMode === 'facial' ? 'Masajea hacia arriba' : 'Masaje circular', curX + 60, curY);
+            canvasCtx.shadowBlur = 0; 
+        }
+
+        // --- Scanning Sequence ---
+        function startUVScan() {
+            if(isUvScanning) return;
+            isUvScanning = true;
+            uvScanProgress = 0;
+            
+            const btn = document.getElementById('btn-scan');
+            const video = document.getElementById('webcam');
+            const badge = document.getElementById('uv-badge');
+            
+            btn.innerHTML = '<span>⏳ Procesando Luz de Wood...</span>';
+            badge.style.display = 'block';
+            video.classList.add('uv-mode');
+
+            const startTime = Date.now();
+            const animate = () => {
+                const elapsed = Date.now() - startTime;
+                uvScanProgress = Math.min(1, elapsed / 4000);
+                if (elapsed < 4000) { requestAnimationFrame(animate); } 
+                else { finishScan(); }
+            };
+            animate();
+        }
+
+        function finishScan() {
+            isUvScanning = false;
+            document.getElementById('webcam').classList.remove('uv-mode');
+            document.getElementById('uv-badge').style.display = 'none';
+            document.getElementById('btn-scan').innerHTML = '<span>🔬 Nuevo Escáner</span>';
+            
+            document.getElementById('nav-res').classList.remove('opacity-50', 'pointer-events-none');
+            document.getElementById('nav-ar').classList.remove('opacity-50', 'pointer-events-none');
+            
+            generateResults();
+            navigateTo('res');
+        }
+
+        function generateResults() {
+            const grid = document.getElementById('metrics-grid');
+            let score = 0;
+
+            if (activeMode === 'facial') {
+                const acne = Math.floor(Math.random()*4);
+                const poros = Math.floor(Math.random()*12)+3;
+                const seq = Math.floor(Math.random()*25)+10;
+                const hum = Math.floor(Math.random()*20)+65;
+                
+                score = Math.floor(Math.max(40, 100 - (acne*6) - (poros*0.8) - (seq*0.6)));
+                
+                grid.innerHTML = `
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Brotes</p>
+                        <p class="text-3xl font-bold text-red-500">${acne}</p>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Porosidad</p>
+                        <p class="text-3xl font-bold text-yellow-600">${poros}</p>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Resequedad</p>
+                        <p class="text-3xl font-bold text-blue-500">${seq}%</p>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Humedad</p>
+                        <p class="text-3xl font-bold text-green-500">${hum}%</p>
+                    </div>
+                `;
+            } else {
+                const frizz = Math.floor(Math.random()*30)+15;
+                const puntas = Math.floor(Math.random()*25)+5;
+                const sebo = Math.floor(Math.random()*40)+20;
+                const porosidad = Math.floor(Math.random()*30)+15;
+                
+                score = Math.floor(Math.max(40, 100 - (frizz*0.5) - (puntas*0.6)));
+                
+                grid.innerHTML = `
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Frizz</p>
+                        <p class="text-3xl font-bold text-orange-500">${frizz}%</p>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Puntas Daño</p>
+                        <p class="text-3xl font-bold text-red-500">${puntas}%</p>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Sebo Capilar</p>
+                        <p class="text-3xl font-bold text-yellow-600">${sebo}%</p>
+                    </div>
+                    <div class="bg-white/60 p-4 rounded-2xl border border-white shadow-sm text-center">
+                        <p class="text-[10px] text-gray-500 font-bold uppercase">Porosidad</p>
+                        <p class="text-3xl font-bold text-blue-500">${porosidad}%</p>
+                    </div>
+                `;
+            }
+
+            const d = new Date();
+            const dateStr = `${d.getDate()}/${d.getMonth()+1}`;
+            
+            const histArray = activeMode === 'facial' ? userHistory.facial : userHistory.capilar;
+            histArray.push({ date: dateStr, score: score });
+            if(histArray.length > 5) histArray.shift();
+            
+            const badge = document.getElementById('score-badge');
+            badge.innerText = `Salud General: ${score}%`;
+            badge.className = score >= 80 ? 'bg-green-100 text-green-600 font-bold px-4 py-1.5 rounded-full border border-green-200' : 'bg-yellow-100 text-yellow-600 font-bold px-4 py-1.5 rounded-full border border-yellow-200';
+            
+            saveHistory();
+            renderRecommendations();
+        }
+
+        function renderRecommendations() {
+            const container = document.getElementById('recommendations-container');
+            container.innerHTML = '';
+            
+            // Randomly pick 3 products from the correct database
+            const db = activeMode === 'facial' ? PRODUCTS_SKINCARE : PRODUCTS_HAIR;
+            let shuffled = [...db].sort(() => 0.5 - Math.random());
+            let selected = shuffled.slice(0, 3);
+            
+            selected.forEach(r => {
+                container.innerHTML += `
+                    <div class="bg-white/80 border-2 border-white rounded-2xl p-4 flex justify-between items-center hover:border-emma-tickled transition-all shadow-sm">
+                        <div>
+                            <span class="text-[10px] font-bold text-emma-tickled uppercase tracking-widest">${r.marca}</span>
+                            <h4 class="font-bold text-emma-dark text-base leading-tight">${r.nombre}</h4>
+                            <p class="text-[11px] text-gray-500 mt-1">${r.desc}</p>
+                        </div>
+                        <div class="flex flex-col items-end justify-center gap-1 pl-4 min-w-[70px]">
+                            <span class="font-bold font-serif text-lg text-emma-dark">${r.precio}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // --- Chart & Chatbot ---
+        function initChart() {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Salud (%)',
+                        data: [],
+                        borderColor: '#F47FBE', backgroundColor: 'rgba(244, 127, 190, 0.15)',
+                        borderWidth: 4, pointBackgroundColor: '#FFD700',
+                        pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: 6,
+                        fill: true, tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { min: 0, max: 100, grid: { color: 'rgba(0,0,0,0.05)' } }, x: { grid: { display: false } } }
+                }
+            });
+        }
+
+        function updateChart() {
+            if(!chartInstance) return;
+            const histArray = activeMode === 'facial' ? userHistory.facial : userHistory.capilar;
+            chartInstance.data.labels = histArray.map(h => h.date);
+            chartInstance.data.datasets[0].data = histArray.map(h => h.score);
+            chartInstance.update();
+        }
+
+        function toggleChat() {
+            const win = document.getElementById('chatbot-window');
+            if(win.classList.contains('scale-0')) {
+                win.classList.remove('scale-0', 'opacity-0');
+            } else {
+                win.classList.add('scale-0', 'opacity-0');
+            }
+        }
+
+        function handleChatKey(e) { if(e.key === 'Enter') sendMessage(); }
+
+        const BOT_RESPONSES = [
+            "Para aplicar el producto correctamente, sigue las instrucciones de la mano animada en la pestaña AR.",
+            "He actualizado tus métricas en base al escaneo de hoy. ¡Sigue tu rutina al pie de la letra!",
+            "Esa marca es excelente, usamos sus principios activos en nuestro simulador clínico."
+        ];
+
+        function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if(!text) return;
+            
+            const chatMsg = document.getElementById('chat-messages');
+            chatMsg.innerHTML += `<div class="chat-bubble-user animate-pop-in">${text}</div>`;
+            input.value = '';
+            chatMsg.scrollTop = chatMsg.scrollHeight;
+            
+            setTimeout(() => {
+                const randResp = BOT_RESPONSES[Math.floor(Math.random() * BOT_RESPONSES.length)];
+                chatMsg.innerHTML += `<div class="chat-bubble-ai animate-pop-in">${randResp}</div>`;
+                chatMsg.scrollTop = chatMsg.scrollHeight;
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
